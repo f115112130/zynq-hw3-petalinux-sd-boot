@@ -1,0 +1,54 @@
+tim@tim-VirtualBox:~/hw3_linux$ petalinux-boot --qemu --kernel
+INFO: The image provided is a zImage
+INFO: Starting arm QEMU
+Uncompressing Linux... done, booting the kernel.
+Booting Linux on physical CPU 0x0
+Linux version 4.14.0-xilinx-v2018.3 (oe-user@oe-host) (gcc version 7.3.0 (GCC)) #2 SMP PREEMPT Wed Nov 25 08:45:27 UTC 2026
+CPU: ARMv7 Processor [410fc090] revision 0 (ARMv7), cr=10c5387d
+OF: fdt: Machine model: xlnx,zynq-7000
+Kernel command line: console=ttyPS0,115200 earlyprintk
+Memory: 999544K/1048576K available
+smp: Brought up 1 node, 2 CPUs
+SMP: Total of 2 processors activated (3516.00 BogoMIPS).
+e0001000.serial: ttyPS0 at MMIO 0xe0001000 (irq = 24, base_baud = 992063) is a xuartps
+console [ttyPS0] enabled
+fpga_manager fpga0: Xilinx Zynq FPGA Manager registered
+Freeing unused kernel memory: 14336K
+udevd[684]: starting version 3.2.2
+
+PetaLinux 2018.3 hw3_linux /dev/ttyPS0
+
+hw3_linux login: root
+Password:
+root@hw3_linux:~# uname -a
+Linux hw3_linux 4.14.0-xilinx-v2018.3 #2 SMP PREEMPT Wed Nov 25 08:45:27 UTC 2026 armv7l GNU/Linux
+root@hw3_linux:~# cat /proc/cpuinfo
+processor	: 0
+model name	: ARMv7 Processor rev 0 (v7l)
+BogoMIPS	: 1633.48
+Features	: half thumb fastmult vfp edsp neon vfpv3 tls vfpd32
+CPU implementer	: 0x41
+CPU architecture: 7
+CPU part	: 0xc09
+
+processor	: 1
+model name	: ARMv7 Processor rev 0 (v7l)
+BogoMIPS	: 1882.52
+Features	: half thumb fastmult vfp edsp neon vfpv3 tls vfpd32
+CPU implementer	: 0x41
+CPU architecture: 7
+CPU part	: 0xc09
+
+Hardware	: Xilinx Zynq Platform
+root@hw3_linux:~# ls /
+bin    dev    home   lib    mnt    run    sys    usr
+boot   etc    init   media  proc   sbin   tmp    var
+root@hw3_linux:~# df -h
+Filesystem                Size      Used Available Use% Mounted on
+devtmpfs                488.1M      4.0K    488.1M   0% /dev
+tmpfs                   503.1M     56.0K    503.0M   0% /run
+tmpfs                   503.1M     32.0K    503.0M   0% /var/volatile
+root@hw3_linux:~# poweroff
+The system is going down for system halt NOW!
+...
+reboot: System halted

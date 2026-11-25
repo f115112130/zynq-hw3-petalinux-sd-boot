@@ -1,0 +1,6 @@
+# PetaLinux build outputs
+build/
+images/
+components/
+*.BIN
+*.ub
