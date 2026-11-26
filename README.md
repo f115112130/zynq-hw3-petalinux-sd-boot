@@ -132,7 +132,7 @@ Linux hw3_linux 4.14.0-xilinx-v2018.3 #2 SMP PREEMPT Wed Nov 25 08:45:27 UTC 202
 | `uImage` | 3.8 MB | **自己 build 的 kernel**（Linux-4.14.0-xilinx，Load Address 0x8000） |
 | `devicetree.dtb` | 9.7 KB | zynq-zed device tree |
 | `boot.scr` | 313 B | U-Boot 開機腳本（[`bonus/boot.cmd`](bonus/boot.cmd)） |
-| `rootfs.ext4` | 128 MB | **自己 build 的 FS**（Buildroot） |
+| `rootfs.ext4` | 128 MB | **自己 build 的 FS**（Buildroot，`rootfs.ext4 -> rootfs.ext2`，格式為 ext4） |
 
 ### Bootloader 設定開機
 [`bonus/boot.cmd`](bonus/boot.cmd) 經 `mkimage -T script` 轉成 `boot.scr`，U-Boot 開機時自動執行；也可在 `Zynq>` 提示字元手動輸入：
@@ -150,10 +150,33 @@ bootm 0x3000000 - 0x2A00000
 | `bootm 0x3000000 - 0x2A00000` | 啟動 kernel；`-` 表示不使用 initramfs，rootfs 從 SD 卡掛載 |
 
 ### SD 卡配置
+在 Ubuntu 用 loop device 做出完整的 SD 卡映像檔 `sdcard.img`（300 MB），再用 balenaEtcher 燒進 SD 卡：
+```bash
+dd if=/dev/zero of=sdcard.img bs=1M count=300
+printf 'label: dos\n1M,100M,c,*\n,,83\n' | sfdisk sdcard.img
+LOOP=$(sudo losetup -fP --show sdcard.img)
+sudo mkfs.vfat -F 32 -n BOOT ${LOOP}p1
+sudo mount ${LOOP}p1 /mnt/sd1
+sudo cp BOOT.bin uImage devicetree.dtb boot.scr /mnt/sd1/ && sudo umount /mnt/sd1
+sudo dd if=buildroot-2019.02.11/output/images/rootfs.ext4 of=${LOOP}p2 bs=1M
+sudo losetup -d $LOOP
+```
+結果：
+```
+Device      Boot  Start    End Sectors  Size Id Type
+sdcard.img1 *      2048 206847  204800  100M  c W95 FAT32 (LBA)
+sdcard.img2      206848 614399  407552  199M 83 Linux
+
+/mnt/sd1:
+-rwxr-xr-x 1 root root 4638664 BOOT.bin
+-rwxr-xr-x 1 root root     313 boot.scr
+-rwxr-xr-x 1 root root    9866 devicetree.dtb
+-rwxr-xr-x 1 root root 3965608 uImage
+```
 | 分割區 | 格式 | 內容 |
 |---|---|---|
-| p1 | FAT32 | `BOOT.bin`、`uImage`、`devicetree.dtb`、`boot.scr` |
-| p2 | ext4 | `rootfs.ext4`（`dd` 寫入） |
+| p1（100 MB，boot flag） | FAT32 | `BOOT.bin`、`uImage`、`devicetree.dtb`、`boot.scr` |
+| p2（199 MB） | ext4 | `rootfs.ext4`（`dd` 寫入），kernel 以 `root=/dev/mmcblk0p2` 掛載 |
 
 Bonus 的 `BOOT.bin` 與基本要求的 `BOOT.BIN` 同名（FAT 不分大小寫），兩套需分開放（建議第二張 SD 卡）。
 
@@ -163,11 +186,14 @@ Bonus 的 `BOOT.bin` 與基本要求的 `BOOT.BIN` 同名（FAT 不分大小寫�
 | 裝了 `gcc-arm-linux-gnueabihf` 後，`settings.sh` 出現 `missing ... gcc-multilib` | Ubuntu 上兩者互斥，apt 自動移除了 gcc-multilib | 重裝 `gcc-multilib`，改用 PetaLinux 內附的 Linaro 交叉編譯器 |
 | kernel 原始碼被 clone 到 `~/linux-xlnx` | 下載時 `~/bonus` 尚未建立 | `mv ~/linux-xlnx ~/bonus/` |
 | Buildroot 設定誤貼到 kernel 終端機，kernel `.config` 多出 `BR2_*` | 多個終端機同時開著 | `sed -i '/^BR2_/d' .config`（kernel 的 olddefconfig 也會自動丟掉）；之後指令改用絕對路徑 |
+| USB 讀卡機接不進虛擬機，無法直接分割 SD 卡 | VirtualBox USB 直通不穩定 | 在 Ubuntu 用 loop device 做 `sdcard.img`，經共用資料夾交給 Windows，用 balenaEtcher 燒錄 |
 | Buildroot 不能在 source PetaLinux 的終端機執行 | PetaLinux 修改 PATH 等環境變數，Buildroot 會檢查並拒絕 | Buildroot 使用全新的終端機 |
 | `zynq_zed_defconfig` 會連 kernel、U-Boot 一起編 | 預設設定 | 關閉 `BR2_LINUX_KERNEL`、`BR2_TARGET_UBOOT`、`BR2_ROOTFS_POST_IMAGE_SCRIPT`，只產生 ext4 |
 
 ### 結果
-<!-- TODO：rootfs.ext4 編譯結果、SD 卡分割、實機 U-Boot 設定開機與 Buildroot 登入截圖 -->
+三個元件與 SD 卡映像檔皆已完成（見上方產出與 SD 卡配置）。
+
+<!-- TODO：實機 U-Boot 手動設定開機、kernel 開機訊息、Buildroot 登入（Welcome to Buildroot）截圖 -->
 
 ## 參考資料
 - UG1144 PetaLinux Tools Documentation Reference Guide (v2018.3)
