@@ -111,20 +111,63 @@ Linux hw3_linux 4.14.0-xilinx-v2018.3 #2 SMP PREEMPT Wed Nov 25 08:45:27 UTC 202
 
 可忽略的警告：`This is not a supported OS`、`syntax error in expression (10#15~1)`、`No tftp server found`、`sysvinit-inittab scriptlet failed`、`Failed to copy built images to tftp dir`。
 
-## Bonus：自己 build（規劃）
-| 元件 | Source URL | 版本 |
-|---|---|---|
-| Bootloader（U-Boot） | https://github.com/Xilinx/u-boot-xlnx | `xilinx-v2018.3`，`zynq_zed_defconfig` |
-| Kernel | https://github.com/Xilinx/linux-xlnx | `xilinx-v2018.3`，`xilinx_zynq_defconfig` |
-| FS | https://git.buildroot.net/buildroot | `zynq_zed_defconfig`，輸出 ext4 |
+## Bonus：自己從原始碼 build Bootloader / Kernel / FS
 
-SD 卡切兩個分割區（FAT32：`BOOT.bin`、`uImage`、`devicetree.dtb`；ext4：rootfs），U-Boot 設定：
+不使用 PetaLinux 的一鍵打包，三個元件分別從原始碼編譯，再手動設定 U-Boot 開機。
+完整指令見 [`bonus/build_bonus.sh`](bonus/build_bonus.sh)。
+
+### Source URL
+| 元件 | Source URL | 版本 / 設定 |
+|---|---|---|
+| ① Bootloader（U-Boot） | https://github.com/Xilinx/u-boot-xlnx | tag `xilinx-v2018.3`，`zynq_zed_defconfig` |
+| ② Kernel | https://github.com/Xilinx/linux-xlnx | tag `xilinx-v2018.3`，`xilinx_zynq_defconfig`，`uImage`（LOADADDR 0x8000）+ `zynq-zed.dtb` |
+| ③ FS（Buildroot） | https://buildroot.org/downloads/buildroot-2019.02.11.tar.gz | `zynq_zed_defconfig`，關閉 kernel / U-Boot，輸出 ext4 |
+
+交叉編譯器：PetaLinux 2018.3 內附 Linaro GCC 7.3（`arm-linux-gnueabihf-`）。
+
+### 產出
+| 檔案 | 大小 | 說明 |
+|---|---|---|
+| `BOOT.bin` | 4.5 MB | FSBL + bitstream + **自己 build 的 U-Boot**（[`bonus/boot.bif`](bonus/boot.bif)） |
+| `uImage` | 3.8 MB | **自己 build 的 kernel**（Linux-4.14.0-xilinx，Load Address 0x8000） |
+| `devicetree.dtb` | 9.7 KB | zynq-zed device tree |
+| `boot.scr` | 313 B | U-Boot 開機腳本（[`bonus/boot.cmd`](bonus/boot.cmd)） |
+| `rootfs.ext4` | 128 MB | **自己 build 的 FS**（Buildroot） |
+
+### Bootloader 設定開機
+[`bonus/boot.cmd`](bonus/boot.cmd) 經 `mkimage -T script` 轉成 `boot.scr`，U-Boot 開機時自動執行；也可在 `Zynq>` 提示字元手動輸入：
 ```
 setenv bootargs console=ttyPS0,115200 root=/dev/mmcblk0p2 rw rootwait
-setenv bootcmd 'fatload mmc 0 0x3000000 uImage; fatload mmc 0 0x2A00000 devicetree.dtb; bootm 0x3000000 - 0x2A00000'
-saveenv
+fatload mmc 0 0x3000000 uImage
+fatload mmc 0 0x2A00000 devicetree.dtb
+bootm 0x3000000 - 0x2A00000
 ```
-<!-- TODO：Bonus 尚未完成 -->
+| 指令 | 意思 |
+|---|---|
+| `bootargs` | console 用 UART（ttyPS0, 115200）；rootfs 在 SD 卡第 2 分割區（ext4），可讀寫，等待 SD 卡就緒 |
+| `fatload ... uImage` | 從 SD 卡 FAT 分割區把 kernel 載入記憶體 0x3000000 |
+| `fatload ... devicetree.dtb` | 把 device tree 載入 0x2A00000 |
+| `bootm 0x3000000 - 0x2A00000` | 啟動 kernel；`-` 表示不使用 initramfs，rootfs 從 SD 卡掛載 |
+
+### SD 卡配置
+| 分割區 | 格式 | 內容 |
+|---|---|---|
+| p1 | FAT32 | `BOOT.bin`、`uImage`、`devicetree.dtb`、`boot.scr` |
+| p2 | ext4 | `rootfs.ext4`（`dd` 寫入） |
+
+Bonus 的 `BOOT.bin` 與基本要求的 `BOOT.BIN` 同名（FAT 不分大小寫），兩套需分開放（建議第二張 SD 卡）。
+
+### Bonus 遇到的問題
+| 問題 | 原因 | 解法 |
+|---|---|---|
+| 裝了 `gcc-arm-linux-gnueabihf` 後，`settings.sh` 出現 `missing ... gcc-multilib` | Ubuntu 上兩者互斥，apt 自動移除了 gcc-multilib | 重裝 `gcc-multilib`，改用 PetaLinux 內附的 Linaro 交叉編譯器 |
+| kernel 原始碼被 clone 到 `~/linux-xlnx` | 下載時 `~/bonus` 尚未建立 | `mv ~/linux-xlnx ~/bonus/` |
+| Buildroot 設定誤貼到 kernel 終端機，kernel `.config` 多出 `BR2_*` | 多個終端機同時開著 | `sed -i '/^BR2_/d' .config`（kernel 的 olddefconfig 也會自動丟掉）；之後指令改用絕對路徑 |
+| Buildroot 不能在 source PetaLinux 的終端機執行 | PetaLinux 修改 PATH 等環境變數，Buildroot 會檢查並拒絕 | Buildroot 使用全新的終端機 |
+| `zynq_zed_defconfig` 會連 kernel、U-Boot 一起編 | 預設設定 | 關閉 `BR2_LINUX_KERNEL`、`BR2_TARGET_UBOOT`、`BR2_ROOTFS_POST_IMAGE_SCRIPT`，只產生 ext4 |
+
+### 結果
+<!-- TODO：rootfs.ext4 編譯結果、SD 卡分割、實機 U-Boot 設定開機與 Buildroot 登入截圖 -->
 
 ## 參考資料
 - UG1144 PetaLinux Tools Documentation Reference Guide (v2018.3)
